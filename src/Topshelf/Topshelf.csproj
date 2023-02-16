@@ -8,6 +8,7 @@
   <PropertyGroup>
     <PackageTags>Topshelf</PackageTags>
     <Description>$(Description)</Description>
+    <Version>4.3.0</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">

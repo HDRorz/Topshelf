@@ -23,6 +23,7 @@ namespace Topshelf.Runtime.Windows
     using System.ServiceProcess;
     using Logging;
     using HostConfigurators;
+    using System.Collections.Generic;
 
     public class WindowsHostEnvironment :
         HostEnvironment
@@ -134,8 +135,8 @@ namespace Topshelf.Runtime.Windows
             {
                 try
                 {
-                    Process process = GetParent(Process.GetCurrentProcess());
-                    if (process != null && process.ProcessName == "services")
+                    Kernel32.PROCESSENTRY32? parentProcessInfo = GetParent(Process.GetCurrentProcess());
+                    if (parentProcessInfo != null && parentProcessInfo.Value.szExeFile == "services.exe")
                     {
                         _log.Debug("Started by the Windows services process");
                         return true;
@@ -278,7 +279,7 @@ namespace Topshelf.Runtime.Windows
         }
 
 
-        Process GetParent(Process child)
+        Kernel32.PROCESSENTRY32? GetParent(Process child)
         {
             if (child == null)
                 throw new ArgumentNullException("child");
@@ -300,15 +301,37 @@ namespace Topshelf.Runtime.Windows
                 if (Kernel32.Process32First(hnd, ref processInfo) == false)
                     return null;
 
+                Dictionary<uint, Kernel32.PROCESSENTRY32> processEntryHis = new Dictionary<uint, Kernel32.PROCESSENTRY32>();
                 do
                 {
+                    processEntryHis[processInfo.th32ProcessID] = processInfo;
+
                     if (child.Id == processInfo.th32ProcessID)
                         parentPid = (int)processInfo.th32ParentProcessID;
                 }
                 while (parentPid == 0 && Kernel32.Process32Next(hnd, ref processInfo));
 
                 if (parentPid > 0)
-                    return Process.GetProcessById(parentPid);
+                {
+                    Kernel32.PROCESSENTRY32 parentProcessInfo;
+                    if (!processEntryHis.TryGetValue(Convert.ToUInt32(parentPid), out parentProcessInfo))
+                    {
+                        do
+                        {
+                            if (parentPid == processInfo.th32ProcessID)
+                            {
+                                parentProcessInfo = processInfo;
+                                break;
+                            }
+                        }
+                        while (Kernel32.Process32Next(hnd, ref processInfo));
+                    }
+
+                    if (parentProcessInfo.th32ProcessID > 0)
+                    {
+                        return parentProcessInfo;
+                    }
+                }
             }
             catch (Exception ex)
             {
